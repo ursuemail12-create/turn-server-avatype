@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  coturn:
+    build: .
+    container_name: avatype-turn
+    restart: unless-stopped
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/tcp"
+      - "8080:8080"  # Health check endpoint
+    environment:
+      - COTURN_EXTERNAL_IP=${PUBLIC_IP}
+      - COTURN_REALM=avatype.local
+      - COTURN_USER=test
+      - COTURN_PASSWORD=test123
+      - COTURN_MIN_PORT=49152
+      - COTURN_MAX_PORT=65535
+    volumes:
+      - ./data:/var/lib/coturn
+      - ./logs:/var/log/coturn
+    networks:
+      - turn-network
+
+  # Simple health check API (optional)
+  healthcheck:
+    image: nginx:alpine
+    container_name: turn-healthcheck
+    ports:
+      - "8080:80"
+    volumes:
+      - ./health.html:/usr/share/nginx/html/index.html
+    networks:
+      - turn-network
+    depends_on:
+      - coturn
+
+networks:
+  turn-network:
+    driver: bridge
+
+volumes:
+  turn-data:
+  turn-logs:

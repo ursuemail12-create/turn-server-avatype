@@ -1,0 +1,25 @@
+{
+  "name": "avatype-turn-server",
+  "version": "1.0.0",
+  "description": "STUN/TURN server for Avatype messaging app",
+  "main": "server.js",
+  "scripts": {
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "deploy": "flyctl deploy",
+    "logs": "flyctl logs",
+    "status": "flyctl status",
+    "test": "./healthcheck.sh",
+    "monitor": "watch -n 5 'curl -s http://localhost:8080/health'"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3"
+  },
+  "devDependencies": {
+    "jq": "^1.6",
+    "envsubst": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
