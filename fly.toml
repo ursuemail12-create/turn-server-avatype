@@ -1,12 +1,12 @@
-app = "turn-server-avatype"
-primary_region = "fra"
+app = 'turn-server-avatype'
+primary_region = 'iad'
 kill_signal = "SIGINT"
 kill_timeout = 5
 
 [build]
   dockerfile = "Dockerfile"
 
-# HTTP service for health checks only (Fly.io needs this)
+# HTTP service for Fly.io health checks
 [[services]]
   internal_port = 8080
   protocol = "tcp"
@@ -20,13 +20,13 @@ kill_timeout = 5
     handlers = ["tls", "http"]
   
   [[services.http_checks]]
-    interval = 10000
-    timeout = 2000
-    grace_period = "5s"
-    path = "/health"
+    interval = 15000
+    timeout = 5000
+    grace_period = "10s"
+    path = "/"
     method = "get"
 
-# UDP Service for STUN/TURN (MANDATORY for WebRTC)
+# UDP Service for STUN/TURN (MANDATORY - WebRTC needs UDP!)
 [[services]]
   internal_port = 3478
   protocol = "udp"
@@ -40,25 +40,15 @@ kill_timeout = 5
 [[services]]
   internal_port = 3478
   protocol = "tcp"
-  auto_stop_machines = false
   
   [[services.ports]]
     port = 3478
     handlers = []
-  
-  [[services.tcp_checks]]
-    interval = 30000
-    timeout = 5000
-    grace_period = "10s"
 
-# TLS Service for secure TURN
-[[services]]
-  internal_port = 5349
-  protocol = "tcp"
-  
-  [[services.ports]]
-    port = 5349
-    handlers = ["tls"]
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
 
 [env]
   # Coturn environment variables
@@ -66,12 +56,7 @@ kill_timeout = 5
   COTURN_MIN_PORT = "49152"
   COTURN_MAX_PORT = "65535"
   COTURN_USER = "avatype"
-  # Password will be auto-generated if not set
-
-[[vm]]
-  memory = "1gb"
-  cpu_kind = "shared"
-  cpus = 1
+  COTURN_PASSWORD = "changeme123"
 
 [mounts]
   source = "coturn_data"

@@ -22,18 +22,18 @@ COPY healthcheck.sh /healthcheck.sh
 # Make scripts executable
 RUN chmod +x /entrypoint.sh /healthcheck.sh && \
     mkdir -p /var/run/coturn && \
-    chown -R turnserver:turnserver /var/run/coturn
+    chown -R coturn:coturn /var/run/coturn
 
 # Create logs directory with correct permissions
 RUN mkdir -p /var/log/coturn && \
-    chown -R turnserver:turnserver /var/log/coturn
+    chown -R coturn:coturn /var/log/coturn
 
 # Expose STUN/TURN ports (documentation only)
 EXPOSE 3478/tcp 3478/udp
 EXPOSE 5349/tcp 5349/udp
 
-# Switch back to non-root user for security
-USER turnserver
+# Switch back to non-root user for security (Alpine uses 'coturn' user)
+USER coturn
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
