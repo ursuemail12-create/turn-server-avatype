@@ -16,18 +16,19 @@ RUN apk update && apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Create directories with proper permissions
+# Note: coturn alpine image runs as 'nobody:nogroup'
 RUN mkdir -p /var/run/coturn /var/log/coturn /var/lib/coturn \
-    && chown -R turnserver:turnserver /var/run/coturn /var/log/coturn /var/lib/coturn
+    && chown -R nobody:nogroup /var/run/coturn /var/log/coturn /var/lib/coturn \
+    && chmod 755 /var/run/coturn /var/log/coturn /var/lib/coturn
 
 # Copy configuration files
 COPY turnserver.conf /etc/turnserver.conf
 COPY entrypoint.sh /entrypoint.sh
 COPY healthcheck.sh /healthcheck.sh
 
-# Set permissions
+# Set permissions (no chown needed, running as root)
 RUN chmod +x /entrypoint.sh /healthcheck.sh \
-    && chmod 644 /etc/turnserver.conf \
-    && chown turnserver:turnserver /etc/turnserver.conf
+    && chmod 644 /etc/turnserver.conf
 
 # Expose ports
 # STUN/TURN UDP and TCP
