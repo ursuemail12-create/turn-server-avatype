@@ -1,33 +1,32 @@
-# Fly.io Application Configuration
-app = "avatype-turn"
-primary_region = "iad"  # Virginia, USA
-
+app = "turn-server-avatype"
+primary_region = "fra"
 kill_signal = "SIGINT"
 kill_timeout = 5
 
 [build]
   dockerfile = "Dockerfile"
 
-[env]
-  # Coturn environment variables
-  COTURN_EXTERNAL_IP = ""  # Will be auto-detected
-  COTURN_REALM = "avatype.com"
-  COTURN_MIN_PORT = "49152"
-  COTURN_MAX_PORT = "65535"
-  # Authentication
-  COTURN_USER = "avatype"
-  COTURN_PASSWORD = "changeme_strong_password_here"
+# HTTP service for health checks only (Fly.io needs this)
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+  
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+  
+  [[services.http_checks]]
+    interval = 10000
+    timeout = 2000
+    grace_period = "5s"
+    path = "/health"
+    method = "get"
 
-# HTTP health check endpoint (optional)
-[http_service]
-  internal_port = 3478
-  force_https = false
-  auto_stop_machines = true
-  auto_start_machines = true
-  min_machines_running = 1
-  processes = ["app"]
-
-# UDP Service for STUN/TURN
+# UDP Service for STUN/TURN (MANDATORY for WebRTC)
 [[services]]
   internal_port = 3478
   protocol = "udp"
@@ -36,49 +35,15 @@ kill_timeout = 5
   [[services.ports]]
     port = 3478
     handlers = []
-  
-  [[services.tcp_checks]]
-    interval = 15000
-    timeout = 2000
-    grace_period = "5s"
 
 # TCP Service for STUN/TURN (fallback)
 [[services]]
   internal_port = 3478
   protocol = "tcp"
-  
-  [[services.ports]]
-    port = 3478
-    handlers = []
-  
-  [[services.tcp_checks]]
-    interval = 15000
-    timeout = 2000
-    grace_period = "5s"
-
-# TLS Service (optional, for secure TURN)
-[[services]]
-  internal_port = 5349
-  protocol = "tcp"
-  
-  [[services.ports]]
-    port = 5349
-    handlers = ["tls"]
-  
-  [[services.tcp_checks]]
-    interval = 15000
-    timeout = 2000
-    grace_period = "5s"
-
-# Dynamic UDP ports for media relay
-[[services]]
-  internal_port = 49152
-  protocol = "udp"
   auto_stop_machines = false
   
   [[services.ports]]
-    port = 49152
-    end_port = 65535
+    port = 3478
     handlers = []
   
   [[services.tcp_checks]]
@@ -86,23 +51,33 @@ kill_timeout = 5
     timeout = 5000
     grace_period = "10s"
 
-# Add more regions for global deployment (optional)
-# [[services]]
-#   internal_port = 3478
-#   protocol = "udp"
-#   [[services.ports]]
-#     port = 3478
-#   processes = ["app"]
-#   [services.concurrency]
-#     type = "connections"
-#     hard_limit = 100
-#     soft_limit = 50
+# TLS Service for secure TURN
+[[services]]
+  internal_port = 5349
+  protocol = "tcp"
+  
+  [[services.ports]]
+    port = 5349
+    handlers = ["tls"]
+
+[env]
+  # Coturn environment variables
+  COTURN_REALM = "turn-server-avatype.fly.dev"
+  COTURN_MIN_PORT = "49152"
+  COTURN_MAX_PORT = "65535"
+  COTURN_USER = "avatype"
+  # Password will be auto-generated if not set
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  source = "coturn_data"
+  destination = "/var/lib/coturn"
 
 [deploy]
   strategy = "rolling"
   max_unavailable = 0
   wait_time = 30
-
-[mounts]
-  source = "turn_data"
-  destination = "/var/lib/coturn"

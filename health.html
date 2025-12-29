@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Avatype STUN/TURN Server</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .status { padding: 20px; border-radius: 5px; }
+        .healthy { background: #d4edda; color: #155724; }
+        .unhealthy { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Avatype STUN/TURN Server</h1>
+    <div id="status" class="status">
+        Checking server status...
+    </div>
+    
+    <script>
+        async function checkHealth() {
+            try {
+                // Check STUN server
+                const response = await fetch('/health');
+                if (response.ok) {
+                    document.getElementById('status').className = 'status healthy';
+                    document.getElementById('status').innerHTML = '✅ Server is healthy and running';
+                } else {
+                    document.getElementById('status').className = 'status unhealthy';
+                    document.getElementById('status').innerHTML = '❌ Server is not responding correctly';
+                }
+            } catch (error) {
+                document.getElementById('status').className = 'status unhealthy';
+                document.getElementById('status').innerHTML = '❌ Cannot connect to server: ' + error.message;
+            }
+        }
+        
+        checkHealth();
+        setInterval(checkHealth, 10000);
+    </script>
+</body>
+</html>
