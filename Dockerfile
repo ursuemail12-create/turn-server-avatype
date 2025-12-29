@@ -1,47 +1,49 @@
-# Use official coturn Alpine image
+# Avatype STUN/TURN Server
+# Based on official coturn Alpine image
+
 FROM coturn/coturn:alpine
 
 # Switch to root for setup
 USER root
 
-# Install dependencies needed for health check
+# Install dependencies for health checks and debugging
 RUN apk update && apk add --no-cache \
     bash \
     curl \
     netcat-openbsd \
     bind-tools \
-    iputils-ping \
-    jq \
     openssl \
     && rm -rf /var/cache/apk/*
 
-# Create a non-root user and group for coturn
-RUN addgroup -S turnserver && adduser -S -G turnserver turnserver \
-    && mkdir -p /var/run/coturn /var/log/coturn \
-    && chown -R turnserver:turnserver /var/run/coturn /var/log/coturn
+# Create directories with proper permissions
+RUN mkdir -p /var/run/coturn /var/log/coturn /var/lib/coturn \
+    && chown -R turnserver:turnserver /var/run/coturn /var/log/coturn /var/lib/coturn
 
-# Copy configuration and scripts
+# Copy configuration files
 COPY turnserver.conf /etc/turnserver.conf
 COPY entrypoint.sh /entrypoint.sh
 COPY healthcheck.sh /healthcheck.sh
 
-# Make scripts executable and set ownership
+# Set permissions
 RUN chmod +x /entrypoint.sh /healthcheck.sh \
-    && chown turnserver:turnserver /entrypoint.sh /healthcheck.sh /etc/turnserver.conf
+    && chmod 644 /etc/turnserver.conf \
+    && chown turnserver:turnserver /etc/turnserver.conf
 
-# Expose STUN/TURN ports
-EXPOSE 3478/tcp 3478/udp
-EXPOSE 5349/tcp 5349/udp
+# Expose ports
+# STUN/TURN UDP and TCP
+EXPOSE 3478/udp
+EXPOSE 3478/tcp
+# TURNS (TLS)
+EXPOSE 5349/tcp
+# Media relay ports (limited range for Fly.io compatibility)
+EXPOSE 49152-49252/udp
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["/bin/bash", "/healthcheck.sh"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD /healthcheck.sh || exit 1
 
-# Switch to non-root user
-USER turnserver
+# Run as root to allow binding to privileged ports
+# The turnserver process itself drops privileges
+USER root
 
-# Entrypoint
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
-
-# Default command (if entrypoint does not exec)
-CMD ["turnserver", "-c", "/etc/turnserver.conf", "-n", "--log-file=stdout"]

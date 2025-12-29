@@ -1,10 +1,14 @@
 .git
 .gitignore
+README.md
 *.md
 *.log
 *.tmp
 .DS_Store
 node_modules
 .env
+.env.*
 .vscode
 .idea
+deploy.sh
+docker-compose.yaml
