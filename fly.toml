@@ -1,6 +1,6 @@
 # fly.toml for turn-server-avatype (TURN/STUN server)
 app = "turn-server-avatype"
-primary_region = "fra"  # Change to closest region to your users
+primary_region = "fra"  # Change to your preferred region
 
 [build]
   dockerfile = "Dockerfile"
@@ -15,7 +15,7 @@ primary_region = "fra"  # Change to closest region to your users
     port = 3478
     handlers = []
 
-# TCP service for STUN/TURN (fallback / TLS optional)
+# TCP service for STUN/TURN (fallback / optional TLS)
 [[services]]
   internal_port = 3478
   protocol = "tcp"
@@ -25,7 +25,7 @@ primary_region = "fra"  # Change to closest region to your users
     port = 3478
     handlers = []
 
-# TLS service for secure TURN (optional)
+# TLS service for secure TURN
 [[services]]
   internal_port = 5349
   protocol = "tcp"
@@ -54,14 +54,14 @@ primary_region = "fra"  # Change to closest region to your users
   destination = "/var/lib/coturn"
 
 [deploy]
-  strategy = "canary"
+  strategy = "rolling"
   max_unavailable = 1
   wait_time = 45
 
 [secrets]
   source = "env"
 
-# Optional metrics (for Prometheus scraping if enabled)
+# Optional metrics endpoint (Prometheus scraping)
 [metrics]
   port = 8080
   path = "/metrics"
