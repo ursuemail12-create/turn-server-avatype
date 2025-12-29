@@ -1,12 +1,12 @@
-app = 'turn-server-avatype'
-primary_region = 'iad'
+app = "turn-server-avatype"
+primary_region = "fra"
 kill_signal = "SIGINT"
-kill_timeout = 5
+kill_timeout = 10
 
 [build]
   dockerfile = "Dockerfile"
 
-# HTTP service for Fly.io health checks
+# HTTP Service for monitoring/health checks
 [[services]]
   internal_port = 8080
   protocol = "tcp"
@@ -22,11 +22,11 @@ kill_timeout = 5
   [[services.http_checks]]
     interval = 15000
     timeout = 5000
-    grace_period = "10s"
+    grace_period = "30s"
     path = "/"
     method = "get"
 
-# UDP Service for STUN/TURN (MANDATORY - WebRTC needs UDP!)
+# UDP Service for STUN (primary protocol)
 [[services]]
   internal_port = 3478
   protocol = "udp"
@@ -35,34 +35,67 @@ kill_timeout = 5
   [[services.ports]]
     port = 3478
     handlers = []
+  
+  [[services.tcp_checks]]
+    interval = 30000
+    timeout = 10000
+    grace_period = "60s"
 
 # TCP Service for STUN/TURN (fallback)
 [[services]]
   internal_port = 3478
   protocol = "tcp"
+  auto_stop_machines = false
   
   [[services.ports]]
     port = 3478
     handlers = []
 
+# TLS Service for secure TURN
+[[services]]
+  internal_port = 5349
+  protocol = "tcp"
+  
+  [[services.ports]]
+    port = 5349
+    handlers = ["tls"]
+
+# UDP port range for media relay
+[[services]]
+  internal_port = 49152
+  protocol = "udp"
+  
+  [[services.ports]]
+    port = 49152
+    end_port = 65535
+    handlers = []
+
 [[vm]]
-  memory = "1gb"
+  memory = "2gb"
   cpu_kind = "shared"
-  cpus = 1
+  cpus = 2
 
 [env]
-  # Coturn environment variables
-  COTURN_REALM = "turn-server-avatype.fly.dev"
-  COTURN_MIN_PORT = "49152"
-  COTURN_MAX_PORT = "65535"
-  COTURN_USER = "avatype"
-  COTURN_PASSWORD = "changeme123"
+  TURN_REALM = "turn.avatype.com"
+  TURN_AUTH_SECRET = "changeme_in_production"
+  TURN_MIN_PORT = "49152"
+  TURN_MAX_PORT = "65535"
+  TURN_ENABLE_TLS = "false"
 
 [mounts]
-  source = "coturn_data"
+  source = "turn_data"
   destination = "/var/lib/coturn"
 
 [deploy]
-  strategy = "rolling"
-  max_unavailable = 0
-  wait_time = 30
+  strategy = "canary"
+  max_unavailable = 1
+  wait_time = 45
+
+# Metrics and monitoring
+[metrics]
+  port = 8080
+  path = "/metrics"
+
+# Secrets management (set via flyctl secrets)
+[secrets]
+  source = "env"

@@ -1,64 +1,54 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting Avatype STUN Server"
+echo "========================================"
+echo "Avatype STUN/TURN Server - Starting up"
+echo "========================================"
 
-# Auto-detect external IP for Fly.io
-if [ -z "$COTURN_EXTERNAL_IP" ]; then
-    echo "🔍 Auto-detecting external IP..."
-    
-    # Try multiple methods to get external IP
-    COTURN_EXTERNAL_IP=$(curl -s --connect-timeout 3 https://ifconfig.me 2>/dev/null || \
-                         curl -s --connect-timeout 3 https://icanhazip.com 2>/dev/null || \
-                         curl -s --connect-timeout 3 https://api.ipify.org 2>/dev/null || \
-                         echo "auto")
-    
-    echo "✅ Detected IP: $COTURN_EXTERNAL_IP"
-    export COTURN_EXTERNAL_IP
+# Generate secrets if not provided
+if [ -z "$TURN_AUTH_SECRET" ]; then
+    export TURN_AUTH_SECRET=$(openssl rand -hex 32)
+    echo "Generated auth secret: ${TURN_AUTH_SECRET:0:8}..."
 fi
 
-# Generate password if not set
-if [ -z "$COTURN_PASSWORD" ]; then
-    export COTURN_PASSWORD=$(openssl rand -hex 16)
-    echo "🔑 Generated password: ${COTURN_PASSWORD}"
+# Auto-detect external IP if not set
+if [ -z "$TURN_EXTERNAL_IP" ]; then
+    echo "Auto-detecting external IP..."
+    export TURN_EXTERNAL_IP=$(curl -s --connect-timeout 5 \
+        https://api.ipify.org || \
+        curl -s --connect-timeout 5 \
+        https://icanhazip.com || \
+        echo "auto")
+    echo "External IP set to: $TURN_EXTERNAL_IP"
 fi
 
-# Create necessary directories
-mkdir -p /var/log/coturn
-chown turnserver:turnserver /var/log/coturn
+# Create runtime directory
+mkdir -p /var/run/coturn
+chown turnserver:turnserver /var/run/coturn
 
-# Generate final config file with environment variables
-echo "📝 Generating configuration..."
-cat > /etc/coturn/turnserver-final.conf <<EOF
-# Generated configuration
-listening-port=3478
-tls-listening-port=5349
-listening-ip=0.0.0.0
-external-ip=${COTURN_EXTERNAL_IP}
-realm=${COTURN_REALM:-turn-server-avatype.fly.dev}
-server-name=avatype-turn-server
-lt-cred-mech
-user=${COTURN_USER:-avatype}:${COTURN_PASSWORD}
-min-port=${COTURN_MIN_PORT:-49152}
-max-port=${COTURN_MAX_PORT:-65535}
-log-file=stdout
-simple-log
-stun-only
-no-tcp-relay
-no-udp-relay
-fingerprint
-verbose
-EOF
+# Process configuration template
+echo "Processing configuration..."
+envsubst < /etc/turnserver.conf > /etc/turnserver-processed.conf
 
-echo "📋 Configuration summary:"
-echo "========================="
-grep -E "^(listening-port|external-ip|realm|user)" /etc/coturn/turnserver-final.conf
-echo "========================="
+# Validate configuration
+if ! turnserver -c /etc/turnserver-processed.conf --test; then
+    echo "ERROR: Configuration validation failed!"
+    exit 1
+fi
 
-# Start simple HTTP server for Fly.io health checks
-echo "🌐 Starting health check server on port 8080..."
-nohup bash -c 'while true; do { echo -e "HTTP/1.1 200 OK\r\n\r\nOK"; } | nc -l -p 8080 -q 1; done' > /dev/null 2>&1 &
+# Start HTTP health check server (port 8080)
+echo "Starting health check server on port 8080..."
+(
+    while true; do
+        echo -e "HTTP/1.1 200 OK\r\n\r\nAvatype STUN/TURN Server" | \
+        nc -l -p 8080 -q 1 2>/dev/null || sleep 1
+    done
+) &
 
-# Start coturn
-echo "🎯 Starting coturn STUN server..."
-exec turnserver -c /etc/coturn/turnserver-final.conf -n
+# Start the main server
+echo "Starting coturn server..."
+exec turnserver -c /etc/turnserver-processed.conf \
+    --log-file /var/log/coturn/turn.log \
+    --simple-log \
+    --no-cli \
+    --verbosity 3
