@@ -1,45 +1,47 @@
-# Proper STUN/TURN server with full functionality
-FROM debian:bullseye-slim
+# Use official coturn Alpine image
+FROM coturn/coturn:alpine
 
-# Install coturn and required dependencies
-RUN apt-get update && apt-get install -y \
-    coturn \
+# Switch to root for setup
+USER root
+
+# Install dependencies
+RUN apk update && apk add --no-cache \
+    bash \
     curl \
     netcat-openbsd \
+    bind-tools \
     iputils-ping \
-    dnsutils \
     jq \
     openssl \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/cache/apk/*
 
-# Create turnserver user (non-root for security)
-RUN useradd -r -m -U -d /var/lib/coturn -s /bin/false turnserver \
-    && mkdir -p /var/log/coturn /var/run/coturn \
-    && chown -R turnserver:turnserver /var/log/coturn /var/run/coturn
+# Create a non-root user for coturn
+RUN addgroup -S turnserver && adduser -S -G turnserver turnserver \
+    && mkdir -p /var/run/coturn /var/log/coturn \
+    && chown -R turnserver:turnserver /var/run/coturn /var/log/coturn
 
-# Copy configuration files
-COPY turnserver.conf /etc/turnserver.conf
+# Copy configuration and scripts
+COPY turnserver.conf /etc/coturn/turnserver.conf
 COPY entrypoint.sh /entrypoint.sh
 COPY healthcheck.sh /healthcheck.sh
 
-# Set proper permissions
+# Make scripts executable
 RUN chmod +x /entrypoint.sh /healthcheck.sh \
-    && chown turnserver:turnserver /etc/turnserver.conf /entrypoint.sh /healthcheck.sh
+    && chown turnserver:turnserver /entrypoint.sh /healthcheck.sh /etc/coturn/turnserver.conf
 
-# Create log directory
-RUN mkdir -p /var/log/coturn && chown turnserver:turnserver /var/log/coturn
-
-# Expose necessary ports
-EXPOSE 3478/tcp 3478/udp 5349/tcp 5349/udp
+# Expose standard STUN/TURN ports
+EXPOSE 3478/tcp 3478/udp
+EXPOSE 5349/tcp 5349/udp
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD ["/bin/bash", "/healthcheck.sh"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["/bin/bash", "/healthcheck.sh"]
 
-# Run as non-root user
+# Switch to non-root user
 USER turnserver
 
-# Entry point
+# Entrypoint
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
-CMD ["turnserver", "-c", "/etc/turnserver.conf"]
+
+# Default command if entrypoint does not exec
+CMD ["turnserver", "-c", "/etc/coturn/turnserver.conf", "-n", "--log-file=stdout"]
