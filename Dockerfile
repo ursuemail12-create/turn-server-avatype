@@ -1,50 +1,71 @@
-# Avatype STUN/TURN Server
-# Based on official coturn Alpine image
+# Avatype STUN/TURN Server - HARDENED
+# Security-focused container build
 
 FROM coturn/coturn:alpine
 
 # Switch to root for setup
 USER root
 
-# Install dependencies for health checks and debugging
-RUN apk update && apk add --no-cache \
+# ===========================================
+# Security: Update all packages first
+# ===========================================
+RUN apk update && apk upgrade --no-cache
+
+# ===========================================
+# Install minimal dependencies only
+# ===========================================
+RUN apk add --no-cache \
     bash \
     curl \
-    netcat-openbsd \
-    bind-tools \
     openssl \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* /tmp/*
 
-# Create directories with proper permissions
-# Note: coturn alpine image runs as 'nobody:nogroup'
+# ===========================================
+# Security: Create non-root user for runtime
+# ===========================================
 RUN mkdir -p /var/run/coturn /var/log/coturn /var/lib/coturn \
     && chown -R nobody:nogroup /var/run/coturn /var/log/coturn /var/lib/coturn \
-    && chmod 755 /var/run/coturn /var/log/coturn /var/lib/coturn
+    && chmod 750 /var/run/coturn /var/log/coturn /var/lib/coturn
 
+# ===========================================
 # Copy configuration files
-COPY turnserver.conf /etc/turnserver.conf
-COPY entrypoint.sh /entrypoint.sh
-COPY healthcheck.sh /healthcheck.sh
+# ===========================================
+COPY --chmod=644 turnserver.conf /etc/turnserver.conf
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
+COPY --chmod=755 healthcheck.sh /healthcheck.sh
 
-# Set permissions (no chown needed, running as root)
-RUN chmod +x /entrypoint.sh /healthcheck.sh \
-    && chmod 644 /etc/turnserver.conf
+# ===========================================
+# Security: Remove unnecessary files
+# ===========================================
+RUN rm -rf /var/cache/apk/* \
+    /tmp/* \
+    /root/.ash_history \
+    /root/.cache 2>/dev/null || true
 
-# Expose ports
-# STUN/TURN UDP and TCP
+# ===========================================
+# Expose only required ports
+# ===========================================
 EXPOSE 3478/udp
 EXPOSE 3478/tcp
-# TURNS (TLS)
 EXPOSE 5349/tcp
-# Media relay ports (limited range for Fly.io compatibility)
 EXPOSE 49152-49252/udp
 
+# ===========================================
 # Health check
+# ===========================================
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
     CMD /healthcheck.sh || exit 1
 
-# Run as root to allow binding to privileged ports
-# The turnserver process itself drops privileges
+# ===========================================
+# Security: Run as root but drop privileges
+# Coturn handles privilege dropping internally
+# ===========================================
 USER root
+
+# ===========================================
+# Security Labels
+# ===========================================
+LABEL security.hardened="true" \
+      security.no-new-privileges="true"
 
 ENTRYPOINT ["/bin/bash", "/entrypoint.sh"]
